@@ -13,6 +13,7 @@
 .depend
 .dirstamp
 autom4te.cache
+config.arch
 config.h.in~
 config.log
 config.status
