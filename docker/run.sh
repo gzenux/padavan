@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
+set -Eeuo pipefail
 
 ImageName=padavan
 ImageTag=rtac51u
-SrcName=${ImageName}
 HostName=${ImageName}
+WorkDir="/work/${ImageName}"
+DockerfileDir=$(readlink -f "$(dirname $BASH_SOURCE)")
 
 function usage() {
 	cat <<EOF >&2
-Usage: $(basename $0) [options]
+Usage: $(basename $BASH_SOURCE) [options] [-- <command>]
 
 Options:
+   -d|--detach
+      start a container in detached mode
+      default: $Detach
    -u|--update
       update/rebuild the docker image before run this image
-      default: false
+      default: $Update
    -f|--force
       force rebuild the docker image without docker cache
-      default: false
+      default: $Force
    -t|--tag
-      change image tag/folder to build/run the docker image
-      default: latest
+      change image tag to build/run the docker image
+      default: $ImageTag
    -h|--help
       show this usage
 
@@ -26,31 +31,41 @@ EOF
 }
 
 # options
-Update=0
-Force=0
-Help=0
-Opts=$(getopt -o uft:h --long update,force,tag:,help -- "$@")
+Detach=false
+Update=false
+Force=false
+Help=false
+Opts=$(getopt -o duft:h --long detach,update,force,tag:,help -- "$@")
 [[ $? != 0 ]] && { usage; exit 1; }
 eval set -- "$Opts"
 while true; do
 	case "$1" in
-		-u|--update) Update=1; shift;;
-		-f|--force)  Update=1; Force=1; shift;;
-		-t|--tag)    ImageTag=$2; [[ -d "$(dirname $0)/${ImageTag}" ]] || { echo "$(dirname $0)/${ImageTag} does not exist!"; exit 1; }; shift 2;;
-		-h|--help)   Help=1; shift;;
+		-d|--detach) Detach=true; shift;;
+		-u|--update) Update=true; shift;;
+		-f|--force)  Update=true; Force=true; shift;;
+		-t|--tag)    ImageTag=$2; shift 2;;
+		-h|--help)   Help=true; shift;;
 		--)          shift; break;;
 		*) echo "Arguments parsing error"; exit 1;;
 	esac
 done
 
-[[ "$Help" == 1 ]] && { usage; exit 0; }
+[[ "$Help" == true ]] && { usage; exit 0; }
 
 Image=${ImageName}:${ImageTag}
-[[ "$(docker images -q ${Image})" == "" || "$Update" == 1 ]] && {
-	[[ -d "$(dirname $0)/${ImageTag}" ]] && pushd $(dirname $0)/${ImageTag} || pushd $(dirname $0)
-	[[ "$Force" == 1 ]] && buildopts="--no-cache"
-	docker build ${buildopts} --build-arg HOME=${HOME} --build-arg USER=${USER} --build-arg UID=${UID} -t ${Image} .
-	popd
+[[ "$(docker images -q ${Image})" == "" || "$Update" == true ]] && {
+	[[ "$Force" == true ]] && BuildOpts="--no-cache" || BuildOpts=""
+	docker build ${BuildOpts} -t ${Image} ${DockerfileDir}
 }
 
-docker run --rm --hostname ${HostName} -v $(pwd):${HOME}/${SrcName} -it ${Image}
+# prepare mount directories
+MountDirOpts="-v $PWD:$WorkDir"
+
+# prepare docker run options
+[[ "$Detach" == true ]] && RunOpts="--rm -d" || RunOpts="--rm -it"
+RunOpts="${RunOpts} --hostname ${HostName}"
+RunOpts="${RunOpts} --workdir ${WorkDir} --env WorkDir=${WorkDir}"
+RunOpts="${RunOpts} --env UID=${UID} --env USER=${USER} --env HOME=${HOME}"
+
+# run docker container
+docker run ${RunOpts} ${MountDirOpts} ${Image} $@
