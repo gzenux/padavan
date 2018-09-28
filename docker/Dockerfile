@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM ubuntu:16.04
 LABEL maintainer="YiJun Chen <gzenux@gmail.com>"
 
 
@@ -18,6 +18,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 	libncurses5-dev \
 	libtool \
 	locales \
+	module-init-tools \
 	pkg-config \
 	sudo \
 	texinfo \
