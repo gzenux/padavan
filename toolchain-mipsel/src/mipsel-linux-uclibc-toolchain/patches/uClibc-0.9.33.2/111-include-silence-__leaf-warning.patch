@@ -1,0 +1,132 @@
+From 75d9bf2dc57f89532a25ab9942b8bea468585199 Mon Sep 17 00:00:00 2001
+From: Bernhard Reutner-Fischer <rep.dot.nop@gmail.com>
+Date: Tue, 17 Mar 2015 20:54:58 +0100
+Subject: [PATCH] include: silence __leaf warning
+
+Signed-off-by: Bernhard Reutner-Fischer <rep.dot.nop@gmail.com>
+---
+ include/sys/sysmacros.h             | 29 +++++++++++---------
+ libc/sysdeps/linux/common/makedev.c | 42 +++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 13 deletions(-)
+ create mode 100644 libc/sysdeps/linux/common/makedev.c
+
+diff --git a/include/sys/sysmacros.h b/include/sys/sysmacros.h
+index 7a5635edd..3addb7500 100644
+--- a/include/sys/sysmacros.h
++++ b/include/sys/sysmacros.h
+@@ -21,35 +21,39 @@
+ 
+ #include <features.h>
+ 
++__BEGIN_DECLS
++
+ /* If the compiler does not know long long it is out of luck.  We are
+    not going to hack weird hacks to support the dev_t representation
+    they need.  */
+-#if 1 /*def __GLIBC_HAVE_LONG_LONG    uClibc note: always enable */
++
+ __extension__
+-static __inline unsigned int gnu_dev_major (unsigned long long int __dev)
+-     __THROW;
++extern unsigned int gnu_dev_major (unsigned long long int __dev)
++     __THROW __attribute__ ((__const__));
++libc_hidden_proto(gnu_dev_major)
+ __extension__
+-static __inline unsigned int gnu_dev_minor (unsigned long long int __dev)
+-     __THROW;
++extern unsigned int gnu_dev_minor (unsigned long long int __dev)
++     __THROW __attribute__ ((__const__));
++libc_hidden_proto(gnu_dev_minor)
+ __extension__
+-static __inline unsigned long long int gnu_dev_makedev (unsigned int __major,
++extern unsigned long long int gnu_dev_makedev (unsigned int __major,
+ 							unsigned int __minor)
+-     __THROW;
++     __THROW __attribute__ ((__const__));
+ 
+-# if defined __GNUC__ && __GNUC__ >= 2
+-__extension__ static __inline unsigned int
++# ifdef __USE_EXTERN_INLINES
++__extension__ __extern_inline __attribute__ ((__const__)) unsigned int
+ __NTH (gnu_dev_major (unsigned long long int __dev))
+ {
+   return ((__dev >> 8) & 0xfff) | ((unsigned int) (__dev >> 32) & ~0xfff);
+ }
+ 
+-__extension__ static __inline unsigned int
++__extension__ __extern_inline __attribute__ ((__const__)) unsigned int
+ __NTH (gnu_dev_minor (unsigned long long int __dev))
+ {
+   return (__dev & 0xff) | ((unsigned int) (__dev >> 12) & ~0xff);
+ }
+ 
+-__extension__ static __inline unsigned long long int
++__extension__ __extern_inline __attribute__ ((__const__)) unsigned long long int
+ __NTH (gnu_dev_makedev (unsigned int __major, unsigned int __minor))
+ {
+   return ((__minor & 0xff) | ((__major & 0xfff) << 8)
+@@ -57,12 +61,11 @@ __NTH (gnu_dev_makedev (unsigned int __major, unsigned int __minor))
+ 	  | (((unsigned long long int) (__major & ~0xfff)) << 32));
+ }
+ # endif
+-
++__END_DECLS
+ 
+ /* Access the functions with their traditional names.  */
+ # define major(dev) gnu_dev_major (dev)
+ # define minor(dev) gnu_dev_minor (dev)
+ # define makedev(maj, min) gnu_dev_makedev (maj, min)
+-#endif
+ 
+ #endif /* sys/sysmacros.h */
+diff --git a/libc/sysdeps/linux/common/makedev.c b/libc/sysdeps/linux/common/makedev.c
+new file mode 100644
+index 000000000..d7761671b
+--- /dev/null
++++ b/libc/sysdeps/linux/common/makedev.c
+@@ -0,0 +1,42 @@
++/* Definitions of functions to access `dev_t' values.
++   Copyright (C) 2003-2015 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <endian.h>
++#include <sys/sysmacros.h>
++
++unsigned int
++gnu_dev_major (unsigned long long int dev)
++{
++  return ((dev >> 8) & 0xfff) | ((unsigned int) (dev >> 32) & ~0xfff);
++}
++libc_hidden_def(gnu_dev_major)
++
++unsigned int
++gnu_dev_minor (unsigned long long int dev)
++{
++  return (dev & 0xff) | ((unsigned int) (dev >> 12) & ~0xff);
++}
++libc_hidden_def(gnu_dev_minor)
++
++unsigned long long int
++gnu_dev_makedev (unsigned int major, unsigned int minor)
++{
++  return ((minor & 0xff) | ((major & 0xfff) << 8)
++	  | (((unsigned long long int) (minor & ~0xff)) << 12)
++	  | (((unsigned long long int) (major & ~0xfff)) << 32));
++}
+-- 
+2.26.2
+
